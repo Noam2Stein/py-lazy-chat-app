@@ -1,8 +1,14 @@
 import queue
 
+from socket import *
+
+import select
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import scrolledtext
+
+server = socket()
+server.connect(("INSERT SERVER IP", 2401))
 
 def ask_for_name():
     def on_pressed_enter_chat():
@@ -41,27 +47,29 @@ def enter_chat(self_name):
     chat_area = scrolledtext.ScrolledText(window, state="disabled", font=("Arial", 12))
     chat_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    def insert_message(name, msg):
+    def print_message(username, msg):
         chat_area.config(state="normal")
         
-        if name == self_name:
-            chat_area.insert(tk.END, "- " + name + "(You)\n")
+        if username == self_name:
+            chat_area.insert(tk.END, "- " + username + "(You)\n")
         else:
-            chat_area.insert(tk.END, "- " + name + "\n")
+            chat_area.insert(tk.END, "- " + username + "\n")
 
         chat_area.insert(tk.END, msg + "\n\n")
         chat_area.config(state="disabled")
         chat_area.see(tk.END)
 
-    message_queue = queue.Queue()
-
     def update():
-        while True:
-            try:
-                msg = message_queue.get_nowait()
-                insert_message(msg["name"], msg["msg"])
-            except queue.Empty:
-                break
+        should_read, _, _ = select.select([server], [], [], 0.0)
+        if should_read:
+            server_message = server.recv(1001).decode()
+            server_message_parts = server_message.split("\"")
+
+            username = server_message_parts[0]
+            msg = server_message_parts[2]
+
+            print_message(username, msg)
+
         window.after(100, update)
 
     window.after(100, update)
@@ -75,15 +83,12 @@ def enter_chat(self_name):
     def on_pressed_send():
         msg = msg_entry.get().strip()
         msg_entry.delete(0, tk.END)
-        message_queue.put({"name": self_name, "msg": msg})
+
+        server_msg = f"\"{self_name}\",\"{msg}\""
+        server.send(server_msg.encode())
 
     send_btn = tk.Button(entry_frame, text="Send", command=on_pressed_send)
     send_btn.pack(side=tk.LEFT, padx=5)
-    
-    message_queue.put({"name": "Person", "msg": "Hello"})
-    message_queue.put({"name": self_name, "msg": "Hello to you too!"})
-    message_queue.put({"name": "Person", "msg": "What's up?"})
-    message_queue.put({"name": self_name, "msg": "Nothing much"})
 
     window.mainloop()
 
